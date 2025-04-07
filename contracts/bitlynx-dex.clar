@@ -51,7 +51,7 @@
         reserve-x: uint,
         reserve-y: uint,
         total-shares: uint,
-        last-block-height: uint,
+        last-stacks-block-height: uint,
         cumulative-price-x: uint,
         cumulative-price-y: uint
     }
@@ -135,7 +135,7 @@
                 reserve-x: u0,
                 reserve-y: u0,
                 total-shares: u0,
-                last-block-height: block-height,
+                last-stacks-block-height: stacks-block-height,
                 cumulative-price-x: u0,
                 cumulative-price-y: u0
             }
@@ -159,7 +159,7 @@
             (get reserve-x pool)
             (get reserve-y pool)))
     )
-    (asserts! (<= block-height deadline) ERR-DEADLINE-PASSED)
+    (asserts! (<= stacks-block-height deadline) ERR-DEADLINE-PASSED)
     (asserts! (>= shares min-shares) ERR-SLIPPAGE-TOO-HIGH)
     
     ;; Transfer tokens to pool
@@ -174,7 +174,7 @@
             reserve-x: (+ (get reserve-x pool) amount-x),
             reserve-y: (+ (get reserve-y pool) amount-y),
             total-shares: (+ (get total-shares pool) shares),
-            last-block-height: block-height,
+            last-stacks-block-height: stacks-block-height,
             cumulative-price-x: (get cumulative-price-x pool),
             cumulative-price-y: (get cumulative-price-y pool)
         }
@@ -203,7 +203,7 @@
             (get reserve-y pool)))
     )
     (asserts! (not (var-get emergency-shutdown)) ERR-NOT-AUTHORIZED)
-    (asserts! (<= block-height deadline) ERR-DEADLINE-PASSED)
+    (asserts! (<= stacks-block-height deadline) ERR-DEADLINE-PASSED)
     (asserts! (>= amount-out min-amount-out) ERR-SLIPPAGE-TOO-HIGH)
     
     ;; Transfer tokens
@@ -218,7 +218,7 @@
             reserve-x: (+ (get reserve-x pool) amount-in),
             reserve-y: (- (get reserve-y pool) amount-out),
             total-shares: (get total-shares pool),
-            last-block-height: block-height,
+            last-stacks-block-height: stacks-block-height,
             cumulative-price-x: (+ (get cumulative-price-x pool) 
                 (/ (* (get reserve-y pool) PRECISION) (get reserve-x pool))),
             cumulative-price-y: (+ (get cumulative-price-y pool)
