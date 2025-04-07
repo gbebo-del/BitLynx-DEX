@@ -74,3 +74,46 @@
 ;; Helper functions
 (define-private (get-smaller (a uint) (b uint))
     (if (<= a b) a b))
+
+;; Private functions
+(define-private (calculate-swap-amount (input-amount uint) (input-reserve uint) (output-reserve uint))
+    (let (
+        (input-with-fee (* input-amount (- FEE-DENOMINATOR PROTOCOL-FEE)))
+        (numerator (* input-with-fee output-reserve))
+        (denominator (+ (* input-reserve FEE-DENOMINATOR) input-with-fee))
+    )
+    (/ numerator denominator))
+)
+
+;; Non-recursive square root approximation
+(define-private (approximate-sqrt (y uint))
+    (let (
+        (n (+ y u1))  ;; Initial guess
+        (n2 (/ y n))  ;; Second approximation
+        (n3 (/ (+ n n2) u2))  ;; Average of approximations
+    )
+    n3)  ;; Return approximation
+)
+
+(define-private (calculate-initial-liquidity (amount-x uint) (amount-y uint))
+    (let (
+        (geometric-mean (approximate-sqrt (* amount-x amount-y)))
+    )
+    (if (< geometric-mean MIN-LIQUIDITY)
+        MIN-LIQUIDITY
+        geometric-mean))
+)
+
+(define-private (calculate-liquidity-shares 
+    (amount-x uint) 
+    (amount-y uint) 
+    (total-supply uint) 
+    (reserve-x uint) 
+    (reserve-y uint))
+    (if (is-eq total-supply u0)
+        (calculate-initial-liquidity amount-x amount-y)
+        (get-smaller
+            (/ (* amount-x total-supply) reserve-x)
+            (/ (* amount-y total-supply) reserve-y)
+        ))
+)
