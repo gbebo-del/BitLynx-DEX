@@ -117,3 +117,75 @@
             (/ (* amount-y total-supply) reserve-y)
         ))
 )
+
+;; Private function to handle token transfers
+(define-private (transfer-token (token <ft-trait>) (amount uint) (sender principal) (recipient principal))
+    (contract-call? token transfer amount sender recipient (some 0x)))
+
+;; Public functions
+(define-public (create-pool (token-x principal) (token-y principal))
+    (begin
+        (asserts! (is-none (map-get? pools {token-x: token-x, token-y: token-y})) ERR-POOL-EXISTS)
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        
+        (map-set pools 
+            {token-x: token-x, token-y: token-y}
+            {
+                liquidity: u0,
+                reserve-x: u0,
+                reserve-y: u0,
+                total-shares: u0,
+                last-block-height: block-height,
+                cumulative-price-x: u0,
+                cumulative-price-y: u0
+            }
+        )
+        (ok true)
+    )
+)
+
+(define-public (add-liquidity (token-x <ft-trait>) 
+                             (token-y <ft-trait>)
+                             (amount-x uint)
+                             (amount-y uint)
+                             (min-shares uint)
+                             (deadline uint))
+    (let (
+        (pool (unwrap! (map-get? pools {token-x: (contract-of token-x), token-y: (contract-of token-y)}) ERR-NO-POOL))
+        (shares (calculate-liquidity-shares 
+            amount-x 
+            amount-y 
+            (get total-shares pool)
+            (get reserve-x pool)
+            (get reserve-y pool)))
+    )
+    (asserts! (<= block-height deadline) ERR-DEADLINE-PASSED)
+    (asserts! (>= shares min-shares) ERR-SLIPPAGE-TOO-HIGH)
+    
+    ;; Transfer tokens to pool
+    (unwrap! (transfer-token token-x amount-x tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
+    (unwrap! (transfer-token token-y amount-y tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
+    
+    ;; Update pool data
+    (map-set pools 
+        {token-x: (contract-of token-x), token-y: (contract-of token-y)}
+        {
+            liquidity: (+ (get liquidity pool) u1),
+            reserve-x: (+ (get reserve-x pool) amount-x),
+            reserve-y: (+ (get reserve-y pool) amount-y),
+            total-shares: (+ (get total-shares pool) shares),
+            last-block-height: block-height,
+            cumulative-price-x: (get cumulative-price-x pool),
+            cumulative-price-y: (get cumulative-price-y pool)
+        }
+    )
+    
+    ;; Update provider shares
+    (map-set liquidity-providers
+        {pool-id: {token-x: (contract-of token-x), token-y: (contract-of token-y)}, provider: tx-sender}
+        {shares: (+ (default-to u0 (get shares (map-get? liquidity-providers 
+            {pool-id: {token-x: (contract-of token-x), token-y: (contract-of token-y)}, provider: tx-sender}))) shares)}
+    )
+    
+    (ok shares))
+)
