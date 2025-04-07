@@ -71,6 +71,9 @@
     }
 )
 
+;; Define map for whitelisted tokens
+(define-map approved-tokens {token: principal} {approved: bool})
+
 ;; Helper functions
 (define-private (get-smaller (a uint) (b uint))
     (if (<= a b) a b))
@@ -122,11 +125,20 @@
 (define-private (transfer-token (token <ft-trait>) (amount uint) (sender principal) (recipient principal))
     (contract-call? token transfer amount sender recipient (some 0x)))
 
+;; Function to verify token is valid SIP-010 implementation
+(define-private (is-valid-token (token principal))
+    ;; This could check token against an allowlist or other validation
+    (is-some (map-get? approved-tokens {token: token}))
+)
+
 ;; Public functions
 (define-public (create-pool (token-x principal) (token-y principal))
     (begin
-        (asserts! (is-none (map-get? pools {token-x: token-x, token-y: token-y})) ERR-POOL-EXISTS)
         (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (asserts! (not (is-eq token-x token-y)) ERR-INVALID-PAIR)
+        (asserts! (is-valid-token token-x) ERR-NOT-AUTHORIZED)
+        (asserts! (is-valid-token token-y) ERR-NOT-AUTHORIZED)
+        (asserts! (is-none (map-get? pools {token-x: token-x, token-y: token-y})) ERR-POOL-EXISTS)
         
         (map-set pools 
             {token-x: token-x, token-y: token-y}
@@ -151,7 +163,9 @@
                              (min-shares uint)
                              (deadline uint))
     (let (
-        (pool (unwrap! (map-get? pools {token-x: (contract-of token-x), token-y: (contract-of token-y)}) ERR-NO-POOL))
+        (token-x-principal (contract-of token-x))
+        (token-y-principal (contract-of token-y))
+        (pool (unwrap! (map-get? pools {token-x: token-x-principal, token-y: token-y-principal}) ERR-NO-POOL))
         (shares (calculate-liquidity-shares 
             amount-x 
             amount-y 
@@ -166,9 +180,9 @@
     (unwrap! (transfer-token token-x amount-x tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
     (unwrap! (transfer-token token-y amount-y tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
     
-    ;; Update pool data
+    ;; Update pool data with validated principals
     (map-set pools 
-        {token-x: (contract-of token-x), token-y: (contract-of token-y)}
+        {token-x: token-x-principal, token-y: token-y-principal}
         {
             liquidity: (+ (get liquidity pool) u1),
             reserve-x: (+ (get reserve-x pool) amount-x),
@@ -180,11 +194,11 @@
         }
     )
     
-    ;; Update provider shares
+    ;; Update provider shares with validated principals
     (map-set liquidity-providers
-        {pool-id: {token-x: (contract-of token-x), token-y: (contract-of token-y)}, provider: tx-sender}
+        {pool-id: {token-x: token-x-principal, token-y: token-y-principal}, provider: tx-sender}
         {shares: (+ (default-to u0 (get shares (map-get? liquidity-providers 
-            {pool-id: {token-x: (contract-of token-x), token-y: (contract-of token-y)}, provider: tx-sender}))) shares)}
+            {pool-id: {token-x: token-x-principal, token-y: token-y-principal}, provider: tx-sender}))) shares)}
     )
     
     (ok shares))
