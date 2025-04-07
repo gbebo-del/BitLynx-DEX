@@ -127,8 +127,7 @@
 
 ;; Function to verify token is valid SIP-010 implementation
 (define-private (is-valid-token (token principal))
-    ;; This could check token against an allowlist or other validation
-    (is-some (map-get? approved-tokens {token: token}))
+  (default-to false (get approved (map-get? approved-tokens {token: token})))
 )
 
 ;; Public functions
@@ -175,6 +174,8 @@
     )
     (asserts! (<= stacks-block-height deadline) ERR-DEADLINE-PASSED)
     (asserts! (>= shares min-shares) ERR-SLIPPAGE-TOO-HIGH)
+    (asserts! (is-valid-token token-x-principal) ERR-NOT-AUTHORIZED)
+    (asserts! (is-valid-token token-y-principal) ERR-NOT-AUTHORIZED)
     
     ;; Transfer tokens to pool
     (unwrap! (transfer-token token-x amount-x tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
@@ -210,6 +211,8 @@
                                  (min-amount-out uint)
                                  (deadline uint))
     (let (
+        (token-in-principal (contract-of token-in))
+        (token-out-principal (contract-of token-out))
         (pool (unwrap! (map-get? pools {token-x: (contract-of token-in), token-y: (contract-of token-out)}) ERR-NO-POOL))
         (amount-out (calculate-swap-amount 
             amount-in
@@ -219,6 +222,8 @@
     (asserts! (not (var-get emergency-shutdown)) ERR-NOT-AUTHORIZED)
     (asserts! (<= stacks-block-height deadline) ERR-DEADLINE-PASSED)
     (asserts! (>= amount-out min-amount-out) ERR-SLIPPAGE-TOO-HIGH)
+    (asserts! (is-valid-token token-in-principal) ERR-NOT-AUTHORIZED)
+    (asserts! (is-valid-token token-out-principal) ERR-NOT-AUTHORIZED)
     
     ;; Transfer tokens
     (unwrap! (transfer-token token-in amount-in tx-sender (as-contract tx-sender)) ERR-TRANSFER-FAILED)
@@ -272,8 +277,21 @@
 )
 
 (define-public (set-governance-token (token (optional principal)))
-    (begin
-        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
-        (var-set governance-token token)
-        (ok true))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (match token
+      token-principal (asserts! (is-valid-token token-principal) ERR-NOT-AUTHORIZED)
+      true
+    )
+    (var-set governance-token token)
+    (ok true)
+  )
+)
+
+(define-public (approve-token (token principal))
+  (begin
+    (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+    (map-set approved-tokens {token: token} {approved: true})
+    (ok true)
+  )
 )
