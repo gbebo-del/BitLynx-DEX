@@ -228,3 +228,38 @@
     
     (ok amount-out))
 )
+
+;; Read-only functions
+(define-read-only (get-pool-details (token-x principal) (token-y principal))
+    (map-get? pools {token-x: token-x, token-y: token-y})
+)
+
+(define-read-only (get-reserves (token-x principal) (token-y principal))
+    (let ((pool (unwrap! (map-get? pools {token-x: token-x, token-y: token-y}) ERR-NO-POOL)))
+    (ok {
+        reserve-x: (get reserve-x pool),
+        reserve-y: (get reserve-y pool)
+    }))
+)
+
+(define-read-only (get-provider-shares (token-x principal) (token-y principal) (provider principal))
+    (default-to 
+        {shares: u0}
+        (map-get? liquidity-providers 
+            {pool-id: {token-x: token-x, token-y: token-y}, provider: provider}))
+)
+
+;; Governance functions
+(define-public (set-emergency-shutdown (shutdown bool))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (var-set emergency-shutdown shutdown)
+        (ok true))
+)
+
+(define-public (set-governance-token (token (optional principal)))
+    (begin
+        (asserts! (is-eq tx-sender CONTRACT-OWNER) ERR-NOT-AUTHORIZED)
+        (var-set governance-token token)
+        (ok true))
+)
